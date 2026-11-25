@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<title>eu</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151821; --panel-2:#1c202b; --line:#262b37;
+    --text:#e9ebf1; --muted:#8a92a6; --accent:#2dd4bf; --accent-2:#1f5f58;
+    --mine:#163a37; --theirs:#1c202b; --bad:#ff7a7a;
+    --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+    -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;height:100dvh}
+  button{font-family:inherit;cursor:pointer}
+  input,textarea{font-family:inherit}
+
+  header{display:flex;align-items:center;gap:10px;padding:12px 16px;
+    border-bottom:1px solid var(--line);background:rgba(13,15,20,.85);backdrop-filter:blur(8px)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:.2px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  .dot.off{background:var(--bad);box-shadow:0 0 12px var(--bad)}
+  .brand small{color:var(--muted);font-weight:500}
+  .spacer{flex:1}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:999px;color:var(--text);font-size:13px;font-weight:600}
+  .ghost{background:transparent;border:1px solid var(--line);color:var(--muted);
+    border-radius:10px;padding:7px 11px;font-size:13px}
+  .ghost:hover{color:var(--text);border-color:var(--accent-2)}
+
+  .chat{flex:1;display:flex;flex-direction:column;min-height:0;
+    background:radial-gradient(1100px 560px at 75% -10%, #14211f 0%, var(--bg) 55%)}
+  .messages{flex:1;overflow-y:auto;padding:22px clamp(12px,5vw,80px);display:flex;flex-direction:column;gap:10px}
+  .empty{margin:auto;text-align:center;color:var(--muted);max-width:380px;line-height:1.5}
+  .empty h3{color:var(--text);margin:0 0 6px;font-weight:600}
+  .row{display:flex;max-width:min(640px,86%)}
+  .row.mine{align-self:flex-end}
+  .row.theirs{align-self:flex-start}
+  .bubble{padding:9px 12px;border-radius:14px;border:1px solid var(--line);background:var(--theirs);
+    line-height:1.45;font-size:14.5px;min-width:120px;max-width:100%}
+  .row.mine .bubble{background:var(--mine);border-color:#2a5f5a66}
+  .txt{white-space:pre-wrap;word-break:break-word}
+  .txt a{color:var(--accent)}
+  .att{margin:-2px -4px 6px;border-radius:10px;overflow:hidden}
+  .att img,.att video{display:block;max-width:100%;max-height:420px;border-radius:10px;background:#000}
+  .att img{cursor:zoom-in}
+  .att audio{width:280px;max-width:100%}
+  .att.file{display:flex;gap:10px;align-items:center;padding:8px;background:#0003;cursor:pointer;margin:0 0 6px}
+  .fic{font-size:24px}
+  .fn{font-weight:600;word-break:break-all}
+  .fs{font-size:12px;color:var(--muted)}
+  .ld{padding:22px;text-align:center;color:var(--muted);font-size:13px;background:#0003}
+  .ld.err{color:var(--bad);cursor:pointer}
+  .loadbtn{width:100%;padding:14px;border:1px dashed var(--line);border-radius:10px;background:#0003;
+    color:var(--text);font-size:13.5px;text-align:left}
+  .meta{display:flex;gap:8px;align-items:center;margin-top:5px;font-size:11px;color:var(--muted)}
+  .meta .src{color:var(--accent)}
+  .acts{margin-left:auto;display:flex;gap:2px;opacity:.55;transition:.15s}
+  .bubble:hover .acts{opacity:1}
+  .acts button{background:none;border:none;color:var(--muted);font-size:11px;padding:2px 5px;border-radius:6px}
+  .acts button:hover{color:var(--text);background:#ffffff12}
+
+  .tray{display:none;gap:8px;flex-wrap:wrap;padding:10px clamp(12px,5vw,80px) 0;background:var(--panel)}
+  .tray.on{display:flex}
+  .pill{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 11px;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:999px;font-size:12.5px;max-width:260px}
+  .pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pill button{border:none;background:#ffffff12;color:var(--text);width:22px;height:22px;border-radius:50%;flex:none}
+
+  .composer{border-top:1px solid var(--line);padding:12px clamp(12px,5vw,80px);
+    display:flex;gap:10px;align-items:flex-end;background:var(--panel)}
+  .tray.on + .composer{border-top:none}
+  .composer textarea{flex:1;resize:none;max-height:160px;min-height:46px;padding:12px 14px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:14px;
+    font-size:14.5px;line-height:1.4;outline:none}
+  .composer textarea:focus{border-color:var(--accent-2)}
+  .attach{width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:var(--panel-2);
+    color:var(--text);font-size:22px;flex:none}
+  .attach:hover{border-color:var(--accent-2)}
+  .send{width:46px;height:46px;border-radius:14px;border:none;background:var(--accent);color:#06201d;
+    font-size:18px;display:grid;place-items:center;flex:none;box-shadow:0 6px 18px -8px var(--accent)}
+  .send:disabled{opacity:.4;box-shadow:none}
+
+  .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:var(--panel-2);
+    border:1px solid var(--line);padding:9px 14px;border-radius:12px;font-size:13px;display:none;z-index:40;
+    box-shadow:0 10px 30px -10px #000}
+  .toast.on{display:block}
+  .drop{position:fixed;inset:0;display:none;place-items:center;background:rgba(13,15,20,.8);
+    border:2px dashed var(--accent);font-size:20px;font-weight:600;z-index:60;pointer-events:none}
+  .drop.on{display:grid}
+
+  .scrim{position:fixed;inset:0;background:rgba(6,8,12,.75);backdrop-filter:blur(4px);
+    display:grid;place-items:center;padding:20px;z-index:50}
+  .modal{width:100%;max-width:440px;background:var(--panel);border:1px solid var(--line);
+    border-radius:20px;padding:24px;max-height:100%;overflow:auto}
+  .modal h2{margin:0 0 4px;font-size:19px}
+  .modal p{margin:0 0 16px;color:var(--muted);font-size:13.5px;line-height:1.5}
+  .modal a{color:var(--accent)}
+  .field{margin-bottom:13px}
+  .field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px}
+  .field input{width:100%;padding:12px 13px;background:var(--panel-2);border:1px solid var(--line);
+    color:var(--text);border-radius:12px;font-size:14.5px;outline:none}
+  .field input:focus{border-color:var(--accent-2)}
+  .primary{width:100%;padding:13px;border:none;border-radius:12px;background:var(--accent);color:#06201d;
+    font-size:15px;font-weight:650;margin-top:4px}
+  .primary:disabled{opacity:.5}
+  .err{color:var(--bad);font-size:13px;margin:-4px 0 12px;min-height:16px}
+  .mini{margin-top:14px;font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
+  @media (max-width:600px){ .brand small{display:none} .row{max-width:92%} }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="dot off" id="dot"></span> eu <small>&nbsp;· só seu</small></div>
+    <div class="spacer"></div>
+    <button class="chip" id="devChip" title="Nome deste dispositivo"><span id="devName">—</span></button>
+    <button class="ghost" id="cfgBtn">Config</button>
+    <button class="ghost" id="lockBtn" title="Esquecer tudo neste navegador">Bloquear</button>
+  </header>
+
+  <section class="chat">
+    <div class="messages" id="msgs"></div>
+    <div class="tray" id="tray"></div>
+    <div class="composer">
+      <button class="attach" id="attachBtn" title="Anexar arquivos">+</button>
+      <input type="file" id="file" multiple hidden />
+      <textarea id="input" rows="1" placeholder="Anote algo, cole um print, arraste um arquivo…"></textarea>
+      <button class="send" id="sendBtn" title="Enviar (Enter)">➤</button>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+  <div class="drop" id="drop">Solte para anexar</div>
+  <div class="scrim" id="modal" style="display:none"></div>
+
+<script>
+"use strict";
+const enc = new TextEncoder(), dec = new TextDecoder();
+const $ = (s)=>document.querySelector(s);
+const API = "https://api.github.com";
+const IDX = "i.json";                    // índice cifrado de mensagens
+const CHUNK = 15*1024*1024;              // arquivos vão em partes de 15 MB
+const MAX_FILE = 150*1024*1024;          // limite por arquivo
+const LS = {tok:"eu.tok", repo:"eu.repo", pwd:"eu.pwd", dev:"eu.dev"};
+
+let cfg = {tok:ls(LS.tok), repo:ls(LS.repo), pwd:ls(LS.pwd)};
+let device = ls(LS.dev);
+let KEY = null;
+let msgs = [];
+let etag = null;
+let busy = false;
+let pending = [];
+const urlCache = new Map();
+const rendered = new Map();
+
+function ls(k){ return localStorage.getItem(k) || ""; }
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+function uid(){ return Date.now().toString(36) + crypto.getRandomValues(new Uint32Array(2)).join("").slice(0,10); }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function E(code, msg){ const e = new Error(msg); e.code = code; return e; }
+function size(n){ return n<1024 ? n+" B" : n<1048576 ? (n/1024).toFixed(0)+" KB" : (n/1048576).toFixed(1)+" MB"; }
+function fmt(ts){
+  const d = new Date(ts), now = new Date();
+  const hm = d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  return d.toDateString()===now.toDateString() ? hm : d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+hm;
+}
+function linkify(t){ return esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'); }
+function ready(){ return !!(cfg.tok && cfg.repo && KEY); }
+function setOnline(ok){ $("#dot").classList.toggle("off", !ok); }
+function toast(t){ const el = $("#toast"); if(t){ el.textContent = t; el.classList.add("on"); } else el.classList.remove("on"); }
+
+/* ---------- Cripto (só no navegador) ---------- */
+async function deriveKey(pwd){
+  const km = await crypto.subtle.importKey("raw", enc.encode(pwd), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2", salt:enc.encode("eu:v1"), iterations:200000, hash:"SHA-256"},
+    km, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+}
+async function encBytes(bytes){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:"AES-GCM", iv}, KEY, bytes);
+  return {iv, ct:new Uint8Array(ct)};
+}
+async function decBytes(iv, ct){
+  return new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM", iv}, KEY, ct));
+}
+// base64 robusto pra arquivos grandes (sem estourar a pilha)
+function toB64(bytes){
+  return new Promise((res, rej)=>{
+    const r = new FileReader();
+    r.onload = ()=>{ const s = String(r.result); res(s.slice(s.indexOf(",")+1)); };
+    r.onerror = ()=>rej(r.error);
+    r.readAsDataURL(new Blob([bytes]));
+  });
+}
+async function fromB64(s){
+  const r = await fetch("data:application/octet-stream;base64," + String(s).replace(/\s/g, ""));
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+/* ---------- GitHub (só api.github.com) ---------- */
+async function gh(path, opt={}){
+  const headers = {"Authorization":"Bearer "+cfg.tok, "Accept":"application/vnd.github+json",
+                   "X-GitHub-Api-Version":"2022-11-28", ...(opt.headers||{})};
+  const r = await fetch(API + path, {cache:"no-store", ...opt, headers});
+  if(r.status===401) throw E("401", "Token inválido ou expirado.");
+  return r;
+}
+async function readIndex(useEtag){
+  const r = await gh(`/repos/${cfg.repo}/contents/${IDX}`, {headers: useEtag && etag ? {"If-None-Match":etag} : {}});
+  if(r.status===304) return null;                     // nada mudou
+  if(r.status===404) return {list:[], sha:null, etag:null};
+  if(!r.ok) throw E("http", "GitHub respondeu "+r.status);
+  const j = await r.json();
+  let b64 = j.content;
+  if(!b64 || j.encoding!=="base64"){                  // índice > 1 MB: lê pelo blob
+    const b = await gh(`/repos/${cfg.repo}/git/blobs/${j.sha}`);
+    if(!b.ok) throw E("http", "blob "+b.status);
+    b64 = (await b.json()).content;
+  }
+  const box = JSON.parse(dec.decode(await fromB64(b64)));
+  let list;
+  try{ list = JSON.parse(dec.decode(await decBytes(await fromB64(box.iv), await fromB64(box.ct)))).msgs || []; }
+  catch{ throw E("pwd", "Senha errada para este repositório."); }
+  return {list, sha:j.sha, etag:r.headers.get("ETag")};
+}
+async function putFile(path, b64, message, sha){
+  const body = {message, content:b64};
+  if(sha) body.sha = sha;
+  const r = await gh(`/repos/${cfg.repo}/contents/${path}`, {method:"PUT",
+    headers:{"content-type":"application/json"}, body:JSON.stringify(body)});
+  if(r.status===409 || r.status===422) throw E("conflict", "conflito ("+r.status+")");
+  if(r.status===413) throw E("http", "Parte grande demais para o GitHub.");
+  if(r.status===403 || r.status===404) throw E("http", "Token sem permissão de escrita neste repositório ("+r.status+").");
+  if(!r.ok) throw E("http", "Falha ao salvar ("+r.status+")");
+  return (await r.json()).content.sha;
+}
+async function writeIndex(list, sha){
+  const {iv, ct} = await encBytes(enc.encode(JSON.stringify({v:1, msgs:list})));
+  const box = JSON.stringify({v:1, iv:await toB64(iv), ct:await toB64(ct)});
+  return putFile(IDX, await toB64(enc.encode(box)), "u", sha);
+}
+// lê → altera → grava; se outro dispositivo gravou no meio, tenta de novo
+async function mutate(fn){
+  for(let i=0; i<6; i++){
+    const cur = await readIndex(false);
+    const next = fn(cur.list.slice());
+    try{ await writeIndex(next, cur.sha); msgs = next; etag = null; render(); return; }
+    catch(e){ if(e.code!=="conflict") throw e; await sleep(400 + Math.random()*900); }
+  }
+  throw E("http", "Não consegui salvar (conflitos). Tente de novo.");
+}
+
+/* ---------- Arquivos (cifrados, em partes) ---------- */
+async function uploadFile(file, onProg){
+  const id = uid(), parts = [];
+  const n = Math.max(1, Math.ceil(file.size / CHUNK));
+  for(let i=0; i<n; i++){
+    const bytes = new Uint8Array(await file.slice(i*CHUNK, (i+1)*CHUNK).arrayBuffer());
+    const {iv, ct} = await encBytes(bytes);
+    const b64 = await toB64(ct), p = `f/${id}.${i}`;
+    let sha;
+    for(let k=0; ; k++){
+      try{ sha = await putFile(p, b64, "f"); break; }
+      catch(e){ if(e.code!=="conflict" || k>=4) throw e; await sleep(500 + Math.random()*1000); }
+    }
+    parts.push({p, sha, iv:await toB64(iv)});
+    onProg && onProg((i+1)/n);
+  }
+  return {n:file.name || "arquivo", ty:file.type || "application/octet-stream", sz:file.size, parts};
+}
+async function fileURL(m){
+  if(urlCache.has(m.id)) return urlCache.get(m.id);
+  const chunks = [];
+  for(const part of m.f.parts){
+    const r = await gh(`/repos/${cfg.repo}/git/blobs/${part.sha}`);
+    if(!r.ok) throw E("http", "Arquivo não encontrado ("+r.status+")");
+    const j = await r.json();
+    chunks.push(await decBytes(await fromB64(part.iv), await fromB64(j.content)));
+  }
+  const url = URL.createObjectURL(new Blob(chunks, {type:m.f.ty}));
+  urlCache.set(m.id, url);
+  return url;
+}
+
+/* ---------- Ações ---------- */
+function addFiles(list){
+  for(const f of list){
+    if(f.size > MAX_FILE){ alert(`"${f.name}" tem ${size(f.size)} — o limite é ${size(MAX_FILE)}.`); continue; }
+    pending.push(f);
+  }
+  renderTray();
+}
+async function send(){
+  const ta = $("#input"); const text = ta.value.trim(); const files = pending.slice();
+  if(!text && !files.length) return;
+  if(!ready()){ openConfig(); return; }
+  busy = true; $("#sendBtn").disabled = true;
+  ta.value = ""; autosize(); pending = []; renderTray();
+  try{
+    const out = [];
+    if(files.length){
+      for(let i=0; i<files.length; i++){
+        const f = files[i];
+        toast(`Cifrando e enviando ${f.name}…`);
+        const meta = await uploadFile(f, (p)=>toast(`Enviando ${f.name} — ${Math.round(p*100)}%`));
+        out.push({id:uid(), ts:Date.now(), d:device, t:i===0 ? text : "", f:meta});
+      }
+    } else out.push({id:uid(), ts:Date.now(), d:device, t:text});
+    toast("Salvando…");
+    await mutate(list=>{ list.push(...out); return list; });
+    setOnline(true);
+  }catch(e){
+    setOnline(false);
+    if(!ta.value) ta.value = text;
+    if(!pending.length){ pending = files; renderTray(); }
+    if(e.code==="401" || e.code==="pwd") openConfig(e.message); else alert("Não enviei: "+e.message);
+  }finally{
+    busy = false; $("#sendBtn").disabled = false; toast("");
+  }
+}
+async function download(m, btn){
+  try{
+    if(btn) btn.textContent = "…";
+    const url = await fileURL(m);
+    const a = document.createElement("a"); a.href = url; a.download = m.f.n;
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ alert(e.message); }
+  finally{ if(btn) btn.textContent = "baixar"; }
+}
+async function del(m){
+  if(!confirm("Apagar esta mensagem" + (m.f ? " e o arquivo" : "") + "?")) return;
+  busy = true;
+  try{
+    await mutate(list=>list.filter(x=>x.id!==m.id));
+    if(m.f) for(const part of m.f.parts){
+      try{ await gh(`/repos/${cfg.repo}/contents/${part.p}`, {method:"DELETE",
+        headers:{"content-type":"application/json"}, body:JSON.stringify({message:"d", sha:part.sha})}); }catch{}
+    }
+  }catch(e){ alert("Não apaguei: "+e.message); }
+  finally{ busy = false; }
+}
+function copy(t, btn){
+  const done = ()=>{ btn.textContent = "copiado ✓"; setTimeout(()=>btn.textContent = "copiar", 1200); };
+  if(navigator.clipboard?.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+  function fallback(){ const x = document.createElement("textarea"); x.value = t; document.body.appendChild(x);
+    x.select(); document.execCommand("copy"); x.remove(); done(); }
+}
+
+/* ---------- Render ---------- */
+let loading = 0; const loadQ = [];
+function enqueue(fn){ loadQ.push(fn); pump(); }
+function pump(){ while(loading < 2 && loadQ.length){ loading++; loadQ.shift()().finally(()=>{ loading--; pump(); }); } }
+const io = new IntersectionObserver((ents)=>{
+  for(const en of ents) if(en.isIntersecting){ io.unobserve(en.target); en.target._load && enqueue(en.target._load); }
+}, {root:$("#msgs"), rootMargin:"400px"});
+
+function fileEl(m){
+  const f = m.f;
+  const kind = f.ty.startsWith("image/") ? "img" : f.ty.startsWith("video/") ? "video" : f.ty.startsWith("audio/") ? "audio" : "file";
+  const w = document.createElement("div"); w.className = "att " + kind;
+  if(kind==="file"){
+    w.innerHTML = `<div class="fic">📄</div><div><div class="fn">${esc(f.n)}</div><div class="fs">${size(f.sz)} · clique pra baixar</div></div>`;
+    w.onclick = ()=>download(m);
+    return w;
+  }
+  const load = async ()=>{
+    w.innerHTML = `<div class="ld">decifrando ${esc(f.n)}…</div>`;
+    try{
+      const url = await fileURL(m);
+      w.innerHTML = "";
+      if(kind==="img"){ const im = new Image(); im.src = url; im.alt = f.n; im.onclick = ()=>window.open(url, "_blank"); w.appendChild(im); }
+      else { const v = document.createElement(kind); v.controls = true; v.preload = "metadata"; v.src = url; w.appendChild(v); }
+    }catch(e){ w.innerHTML = `<div class="ld err">${esc(e.message)} — tocar pra tentar de novo</div>`; w.onclick = ()=>{ w.onclick = null; load(); }; }
+  };
+  const auto = kind==="img" ? f.sz < 12e6 : f.sz < 20e6;
+  if(auto){ w.innerHTML = `<div class="ld">${esc(f.n)} · ${size(f.sz)}</div>`; w._load = load; io.observe(w); }
+  else {
+    const icon = kind==="img" ? "🖼️" : kind==="video" ? "▶" : "🎵";
+    w.innerHTML = `<button class="loadbtn">${icon} ${esc(f.n)} · ${size(f.sz)} — carregar</button>`;
+    w.querySelector("button").onclick = load;
+  }
+  return w;
+}
+function msgEl(m){
+  const row = document.createElement("div");
+  row.className = "row " + (m.d===device ? "mine" : "theirs");
+  const b = document.createElement("div"); b.className = "bubble";
+  if(m.f) b.appendChild(fileEl(m));
+  if(m.t){ const t = document.createElement("div"); t.className = "txt"; t.innerHTML = linkify(m.t); b.appendChild(t); }
+  const meta = document.createElement("div"); meta.className = "meta";
+  meta.innerHTML = `<span class="src">${esc(m.d||"")}</span><span>${fmt(m.ts)}</span><span class="acts">`
+    + (m.t ? `<button data-a="copy">copiar</button>` : "")
+    + (m.f ? `<button data-a="dl">baixar</button>` : "")
+    + `<button data-a="del">apagar</button></span>`;
+  meta.onclick = (e)=>{
+    const a = e.target.dataset.a; if(!a) return;
+    if(a==="copy") copy(m.t, e.target);
+    if(a==="dl") download(m, e.target);
+    if(a==="del") del(m);
+  };
+  b.appendChild(meta); row.appendChild(b);
+  return row;
+}
+function render(){
+  const box = $("#msgs");
+  if(!msgs.length){
+    rendered.clear();
+    box.innerHTML = `<div class="empty"><h3>Seu canto privado</h3>
+      <p>Texto, prints, fotos, vídeos e arquivos. Tudo é cifrado aqui no navegador antes de ir pro GitHub — nem o GitHub consegue ler.</p></div>`;
+    return;
+  }
+  box.querySelector(".empty")?.remove();
+  const ids = new Set(msgs.map(m=>m.id));
+  for(const [id, el] of rendered) if(!ids.has(id)){ el.remove(); rendered.delete(id); }
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 150;
+  const first = rendered.size===0;
+  const sorted = msgs.slice().sort((a,b)=>a.ts-b.ts);
+  let added = false;
+  for(let i=sorted.length-1, next=null; i>=0; i--){      // de trás pra frente: insere antes do próximo
+    const m = sorted[i];
+    let el = rendered.get(m.id);
+    if(!el){ el = msgEl(m); rendered.set(m.id, el); box.insertBefore(el, next); added = true; }
+    next = el;
+  }
+  if(added && (first || nearBottom)) box.scrollTop = box.scrollHeight;
+}
+function renderTray(){
+  const t = $("#tray");
+  t.classList.toggle("on", pending.length>0);
+  t.innerHTML = pending.map((f,i)=>`<div class="pill"><span>📎 ${esc(f.name)} · ${size(f.size)}</span><button data-i="${i}" title="Tirar">×</button></div>`).join("");
+  t.querySelectorAll("button").forEach(b=>b.onclick = ()=>{ pending.splice(+b.dataset.i, 1); renderTray(); });
+}
+function autosize(){ const ta = $("#input"); ta.style.height = "auto"; ta.style.height = Math.min(160, ta.scrollHeight)+"px"; }
+
+/* ---------- Sincronização ---------- */
+async function poll(){
+  if(!ready() || busy) return;
+  try{
+    const r = await readIndex(true);
+    setOnline(true);
+    if(r){ msgs = r.list; etag = r.etag; render(); }
+  }catch(e){
+    setOnline(false);
+    if(e.code==="401" || e.code==="pwd") openConfig(e.message);
+  }
+}
+async function loop(){ for(;;){ await poll(); await sleep(document.hidden ? 30000 : 5000); } }
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) poll(); });
+
+/* ---------- Config ---------- */
+function modal(html){ const m = $("#modal"); m.innerHTML = `<div class="modal">${html}</div>`; m.style.display = "grid"; return m; }
+function closeModal(){ $("#modal").style.display = "none"; }
+
+function openConfig(msg){
+  const m = modal(`
+    <h2>Conectar</h2>
+    <p>Suas mensagens ficam cifradas num <b>repositório privado</b> do seu GitHub.
+      Precisa de um token com acesso de escrita a esse repositório.
+      <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Criar token →</a></p>
+    <div class="field"><label>Token do GitHub</label><input id="cTok" type="password" placeholder="github_pat_… ou ghp_…" autocomplete="off"></div>
+    <div class="field"><label>Repositório (usuario/nome)</label><input id="cRepo" placeholder="usuario/repositorio" autocomplete="off"></div>
+    <div class="field"><label>Senha de cifra (a mesma em todo dispositivo)</label><input id="cPwd" type="password" placeholder="senha forte" autocomplete="off"></div>
+    <div class="field"><label>Nome deste dispositivo</label><input id="cDev" maxlength="20" placeholder="Trabalho / Casa / Celular"></div>
+    <div class="err" id="cErr">${esc(msg||"")}</div>
+    <button class="primary" id="cOk">Conectar</button>
+    <div class="mini">Token, senha e nome ficam só neste navegador. Esqueceu a senha = perde o acesso (não há recuperação).</div>`);
+  const tok = m.querySelector("#cTok"), repo = m.querySelector("#cRepo"), pwd = m.querySelector("#cPwd"),
+        dv = m.querySelector("#cDev"), err = m.querySelector("#cErr"), ok = m.querySelector("#cOk");
+  tok.value = cfg.tok; repo.value = cfg.repo; pwd.value = cfg.pwd; dv.value = device;
+  (cfg.tok ? pwd : tok).focus();
+  ok.onclick = async ()=>{
+    const T = tok.value.trim(), P = pwd.value, D = dv.value.trim() || "Dispositivo";
+    let R = repo.value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/+$/, "");
+    if(!T || !R || P.length < 6){ err.textContent = "Preencha tudo (senha com 6+ caracteres)."; return; }
+    ok.disabled = true; err.textContent = "Conectando…";
+    const old = {...cfg}, oldKey = KEY;
+    try{
+      cfg.tok = T;
+      if(!R.includes("/")){
+        const u = await gh("/user"); if(!u.ok) throw E("http", "Não consegui ler seu usuário ("+u.status+")");
+        R = (await u.json()).login + "/" + R;
+      }
+      const r = await gh(`/repos/${R}`);
+      if(r.status===404 || r.status===403) throw E("http", "Repositório não encontrado ou o token não tem acesso a ele.");
+      if(!r.ok) throw E("http", "GitHub respondeu "+r.status);
+      const info = await r.json();
+      if(!info.private) throw E("http", "Esse repositório é PÚBLICO. Use um repositório privado.");
+      cfg.repo = R; KEY = await deriveKey(P);
+      const idx = await readIndex(false);                // confere a senha
+      cfg.pwd = P; device = D;
+      localStorage.setItem(LS.tok, T); localStorage.setItem(LS.repo, R);
+      localStorage.setItem(LS.pwd, P); localStorage.setItem(LS.dev, D);
+      $("#devName").textContent = D;
+      msgs = idx.list; etag = idx.etag;
+      rendered.clear(); $("#msgs").innerHTML = ""; render();
+      setOnline(true); closeModal();
+    }catch(e){
+      cfg = old; KEY = oldKey; ok.disabled = false; err.textContent = e.message;
+    }
+  };
+  m.querySelectorAll("input").forEach(i=>i.onkeydown = (e)=>{ if(e.key==="Enter") ok.click(); });
+}
+
+/* ---------- Eventos ---------- */
+$("#sendBtn").onclick = send;
+$("#input").addEventListener("keydown", (e)=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } });
+$("#input").addEventListener("input", autosize);
+$("#input").addEventListener("paste", (e)=>{
+  const files = [...(e.clipboardData?.files || [])];
+  if(files.length){ e.preventDefault(); addFiles(files.map((f,i)=>f.name && f.name!=="image.png" ? f
+    : new File([f], `print-${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}${i?"-"+i:""}.png`, {type:f.type||"image/png"}))); }
+});
+$("#attachBtn").onclick = ()=>$("#file").click();
+$("#file").onchange = (e)=>{ addFiles([...e.target.files]); e.target.value = ""; };
+let dragDepth = 0;
+window.addEventListener("dragenter", (e)=>{ if([...e.dataTransfer.types].includes("Files")){ dragDepth++; $("#drop").classList.add("on"); } });
+window.addEventListener("dragleave", ()=>{ if(--dragDepth<=0){ dragDepth = 0; $("#drop").classList.remove("on"); } });
+window.addEventListener("dragover", (e)=>e.preventDefault());
+window.addEventListener("drop", (e)=>{ e.preventDefault(); dragDepth = 0; $("#drop").classList.remove("on");
+  if(e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]); });
+window.addEventListener("beforeunload", (e)=>{ if(busy){ e.preventDefault(); e.returnValue = ""; } });
+$("#cfgBtn").onclick = ()=>openConfig();
+$("#devChip").onclick = ()=>openConfig();
+$("#lockBtn").onclick = ()=>{
+  if(!confirm("Esquecer token, senha e repositório DESTE navegador? As mensagens continuam guardadas.")) return;
+  Object.values(LS).forEach(k=>localStorage.removeItem(k));
+  cfg = {tok:"", repo:"", pwd:""}; KEY = null; msgs = []; rendered.clear();
+  $("#msgs").innerHTML = ""; render(); setOnline(false); openConfig();
+};
+
+(async function init(){
+  $("#devName").textContent = device || "definir";
+  render();
+  if(cfg.tok && cfg.repo && cfg.pwd){ KEY = await deriveKey(cfg.pwd); poll(); }
+  else openConfig();
+  loop();
+})();
+</script>
+</body>
+</html>
