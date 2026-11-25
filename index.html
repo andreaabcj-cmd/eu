@@ -110,6 +110,20 @@
   .primary:disabled{opacity:.5}
   .err{color:var(--bad);font-size:13px;margin:-4px 0 12px;min-height:16px}
   .mini{margin-top:14px;font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
+  .tabs{display:flex;gap:6px;padding:8px clamp(12px,5vw,80px);border-bottom:1px solid var(--line);background:var(--panel)}
+  .tabbtn{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:1px solid transparent;
+    background:transparent;color:var(--muted);font-size:13.5px;font-weight:600}
+  .tabbtn:hover{color:var(--text)}
+  .tabbtn.on{background:var(--panel-2);border-color:var(--accent-2);color:var(--text)}
+  .badge{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:#06201d;
+    font-size:11px;display:none;place-items:center}
+  .badge.on{display:grid}
+  .typing{align-self:flex-start;color:var(--muted);font-size:13px;padding:9px 13px;border:1px dashed var(--line);
+    border-radius:14px;background:#ffffff06}
+  .typing .dots::after{content:"";animation:dots 1.4s steps(4,end) infinite}
+  @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+  .row.claude .bubble{background:#1d1a2b;border-color:#3a335a}
+  .row.claude .meta .src{color:#b9a6ff}
   @media (max-width:600px){ .brand small{display:none} .row{max-width:92%} }
 </style>
 </head>
@@ -121,6 +135,11 @@
     <button class="ghost" id="cfgBtn">Config</button>
     <button class="ghost" id="lockBtn" title="Esquecer tudo neste navegador">Bloquear</button>
   </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tabbtn" data-ch="notas">Notas <span class="badge" id="b-notas"></span></button>
+    <button class="tabbtn" data-ch="claude">✦ Claude <span class="badge" id="b-claude"></span></button>
+  </nav>
 
   <section class="chat">
     <div class="messages" id="msgs"></div>
@@ -142,16 +161,20 @@
 const enc = new TextEncoder(), dec = new TextDecoder();
 const $ = (s)=>document.querySelector(s);
 const API = "https://api.github.com";
-const IDX = "i.json";                    // índice cifrado de mensagens
 const CHUNK = 15*1024*1024;              // arquivos vão em partes de 15 MB
 const MAX_FILE = 150*1024*1024;          // limite por arquivo
 const LS = {tok:"eu.tok", repo:"eu.repo", pwd:"eu.pwd", dev:"eu.dev"};
+const BOT = "Claude";                    // nome que a ponte do PC usa nas respostas
+// cada aba tem seu próprio índice cifrado no repositório
+const CH = {notas:{file:"i.json", ph:"Anote algo, cole um print, arraste um arquivo…"},
+            claude:{file:"c.json", ph:"Fale com o Claude (Lojinha Marina)… prints e arquivos também vão"}};
+const st = {notas:{msgs:[], etag:null, seen:-1}, claude:{msgs:[], etag:null, seen:-1}};
 
 let cfg = {tok:ls(LS.tok), repo:ls(LS.repo), pwd:ls(LS.pwd)};
 let device = ls(LS.dev);
 let KEY = null;
-let msgs = [];
-let etag = null;
+let active = CH[localStorage.getItem("eu.tab")] ? localStorage.getItem("eu.tab") : "notas";
+let msgs = [];                           // mensagens da aba ativa (atalho p/ st[active].msgs)
 let busy = false;
 let pending = [];
 const urlCache = new Map();
@@ -209,8 +232,9 @@ async function gh(path, opt={}){
   if(r.status===401) throw E("401", "Token inválido ou expirado.");
   return r;
 }
-async function readIndex(useEtag){
-  const r = await gh(`/repos/${cfg.repo}/contents/${IDX}`, {headers: useEtag && etag ? {"If-None-Match":etag} : {}});
+async function readIndex(ch, useEtag){
+  const et = st[ch].etag;
+  const r = await gh(`/repos/${cfg.repo}/contents/${CH[ch].file}`, {headers: useEtag && et ? {"If-None-Match":et} : {}});
   if(r.status===304) return null;                     // nada mudou
   if(r.status===404) return {list:[], sha:null, etag:null};
   if(!r.ok) throw E("http", "GitHub respondeu "+r.status);
@@ -238,17 +262,22 @@ async function putFile(path, b64, message, sha){
   if(!r.ok) throw E("http", "Falha ao salvar ("+r.status+")");
   return (await r.json()).content.sha;
 }
-async function writeIndex(list, sha){
+async function writeIndex(ch, list, sha){
   const {iv, ct} = await encBytes(enc.encode(JSON.stringify({v:1, msgs:list})));
   const box = JSON.stringify({v:1, iv:await toB64(iv), ct:await toB64(ct)});
-  return putFile(IDX, await toB64(enc.encode(box)), "u", sha);
+  return putFile(CH[ch].file, await toB64(enc.encode(box)), "u", sha);
 }
 // lê → altera → grava; se outro dispositivo gravou no meio, tenta de novo
-async function mutate(fn){
+async function mutate(ch, fn){
   for(let i=0; i<6; i++){
-    const cur = await readIndex(false);
+    const cur = await readIndex(ch, false);
     const next = fn(cur.list.slice());
-    try{ await writeIndex(next, cur.sha); msgs = next; etag = null; render(); return; }
+    try{
+      await writeIndex(ch, next, cur.sha);
+      st[ch].msgs = next; st[ch].etag = null;
+      if(ch===active){ msgs = next; st[ch].seen = next.length; render(); }
+      return;
+    }
     catch(e){ if(e.code!=="conflict") throw e; await sleep(400 + Math.random()*900); }
   }
   throw E("http", "Não consegui salvar (conflitos). Tente de novo.");
@@ -298,6 +327,7 @@ async function send(){
   const ta = $("#input"); const text = ta.value.trim(); const files = pending.slice();
   if(!text && !files.length) return;
   if(!ready()){ openConfig(); return; }
+  const ch = active;
   busy = true; $("#sendBtn").disabled = true;
   ta.value = ""; autosize(); pending = []; renderTray();
   try{
@@ -311,8 +341,8 @@ async function send(){
       }
     } else out.push({id:uid(), ts:Date.now(), d:device, t:text});
     toast("Salvando…");
-    await mutate(list=>{ list.push(...out); return list; });
-    setOnline(true);
+    await mutate(ch, list=>{ list.push(...out); return list; });
+    setOnline(true); updateTyping();
   }catch(e){
     setOnline(false);
     if(!ta.value) ta.value = text;
@@ -335,7 +365,7 @@ async function del(m){
   if(!confirm("Apagar esta mensagem" + (m.f ? " e o arquivo" : "") + "?")) return;
   busy = true;
   try{
-    await mutate(list=>list.filter(x=>x.id!==m.id));
+    await mutate(active, list=>list.filter(x=>x.id!==m.id));
     if(m.f) for(const part of m.f.parts){
       try{ await gh(`/repos/${cfg.repo}/contents/${part.p}`, {method:"DELETE",
         headers:{"content-type":"application/json"}, body:JSON.stringify({message:"d", sha:part.sha})}); }catch{}
@@ -387,7 +417,7 @@ function fileEl(m){
 }
 function msgEl(m){
   const row = document.createElement("div");
-  row.className = "row " + (m.d===device ? "mine" : "theirs");
+  row.className = "row " + (m.d===device ? "mine" : "theirs") + (m.d===BOT ? " claude" : "");
   const b = document.createElement("div"); b.className = "bubble";
   if(m.f) b.appendChild(fileEl(m));
   if(m.t){ const t = document.createElement("div"); t.className = "txt"; t.innerHTML = linkify(m.t); b.appendChild(t); }
@@ -409,8 +439,13 @@ function render(){
   const box = $("#msgs");
   if(!msgs.length){
     rendered.clear();
-    box.innerHTML = `<div class="empty"><h3>Seu canto privado</h3>
-      <p>Texto, prints, fotos, vídeos e arquivos. Tudo é cifrado aqui no navegador antes de ir pro GitHub — nem o GitHub consegue ler.</p></div>`;
+    box.innerHTML = active==="claude"
+      ? `<div class="empty"><h3>✦ Claude</h3>
+        <p>Converse com o Claude continuando a <b>Lojinha Marina</b>. Ele roda no seu PC de casa — o PC precisa estar ligado.
+        Pode mandar prints e arquivos que ele olha.</p></div>`
+      : `<div class="empty"><h3>Seu canto privado</h3>
+        <p>Texto, prints, fotos, vídeos e arquivos. Tudo é cifrado aqui no navegador antes de ir pro GitHub — nem o GitHub consegue ler.</p></div>`;
+    updateTyping();
     return;
   }
   box.querySelector(".empty")?.remove();
@@ -426,7 +461,37 @@ function render(){
     if(!el){ el = msgEl(m); rendered.set(m.id, el); box.insertBefore(el, next); added = true; }
     next = el;
   }
+  updateTyping();
   if(added && (first || nearBottom)) box.scrollTop = box.scrollHeight;
+}
+// "Claude está pensando…": última mensagem da aba Claude é sua e ainda sem resposta
+function updateTyping(){
+  const box = $("#msgs");
+  let el = box.querySelector(".typing");
+  const list = st.claude.msgs;
+  const last = list.length ? list.reduce((a,b)=>a.ts>b.ts ? a : b) : null;
+  const waiting = active==="claude" && last && last.d!==BOT && Date.now()-last.ts < 30*60*1000;
+  if(!waiting){ el?.remove(); return; }
+  const secs = Math.round((Date.now()-last.ts)/1000);
+  const txt = secs < 180 ? `Claude está pensando<span class="dots"></span>`
+    : `Claude está pensando<span class="dots"></span> (${Math.floor(secs/60)} min — o PC de casa está ligado?)`;
+  if(!el){ el = document.createElement("div"); el.className = "typing"; box.appendChild(el); }
+  else if(el !== box.lastElementChild) box.appendChild(el);
+  if(el.dataset.t !== txt){ el.dataset.t = txt; el.innerHTML = txt; }
+}
+function renderBadges(){
+  for(const ch of Object.keys(CH)){
+    const s = st[ch], n = ch===active || s.seen<0 ? 0 : Math.max(0, s.msgs.length - s.seen);
+    const b = $("#b-"+ch); b.textContent = n; b.classList.toggle("on", n>0);
+  }
+  document.querySelectorAll(".tabbtn").forEach(b=>b.classList.toggle("on", b.dataset.ch===active));
+}
+function setTab(ch){
+  active = ch; localStorage.setItem("eu.tab", ch);
+  msgs = st[ch].msgs; st[ch].seen = msgs.length;
+  rendered.clear(); $("#msgs").innerHTML = "";
+  $("#input").placeholder = CH[ch].ph;
+  render(); renderBadges();
 }
 function renderTray(){
   const t = $("#tray");
@@ -440,15 +505,20 @@ function autosize(){ const ta = $("#input"); ta.style.height = "auto"; ta.style.
 async function poll(){
   if(!ready() || busy) return;
   try{
-    const r = await readIndex(true);
-    setOnline(true);
-    if(r){ msgs = r.list; etag = r.etag; render(); }
+    for(const ch of Object.keys(CH)){
+      const r = await readIndex(ch, true);
+      if(!r) continue;                                   // 304: nada mudou
+      const s = st[ch]; s.msgs = r.list; s.etag = r.etag;
+      if(s.seen < 0) s.seen = r.list.length;             // 1ª carga não conta como "não lida"
+      if(ch===active){ msgs = r.list; s.seen = r.list.length; render(); }
+    }
+    setOnline(true); renderBadges(); updateTyping();
   }catch(e){
     setOnline(false);
     if(e.code==="401" || e.code==="pwd") openConfig(e.message);
   }
 }
-async function loop(){ for(;;){ await poll(); await sleep(document.hidden ? 30000 : 5000); } }
+async function loop(){ for(;;){ await poll(); updateTyping(); await sleep(document.hidden ? 30000 : 4000); } }
 document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) poll(); });
 
 /* ---------- Config ---------- */
@@ -476,6 +546,7 @@ function openConfig(msg){
     const T = tok.value.trim(), P = pwd.value, D = dv.value.trim() || "Dispositivo";
     let R = repo.value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/+$/, "");
     if(!T || !R || P.length < 6){ err.textContent = "Preencha tudo (senha com 6+ caracteres)."; return; }
+    if(D.toLowerCase()===BOT.toLowerCase()){ err.textContent = `"${BOT}" é reservado pra ponte. Use outro nome.`; return; }
     ok.disabled = true; err.textContent = "Conectando…";
     const old = {...cfg}, oldKey = KEY;
     try{
@@ -490,14 +561,14 @@ function openConfig(msg){
       const info = await r.json();
       if(!info.private) throw E("http", "Esse repositório é PÚBLICO. Use um repositório privado.");
       cfg.repo = R; KEY = await deriveKey(P);
-      const idx = await readIndex(false);                // confere a senha
+      for(const ch of Object.keys(CH)) st[ch] = {msgs:[], etag:null, seen:-1};
+      await readIndex("notas", false);                   // confere a senha
       cfg.pwd = P; device = D;
       localStorage.setItem(LS.tok, T); localStorage.setItem(LS.repo, R);
       localStorage.setItem(LS.pwd, P); localStorage.setItem(LS.dev, D);
       $("#devName").textContent = D;
-      msgs = idx.list; etag = idx.etag;
-      rendered.clear(); $("#msgs").innerHTML = ""; render();
-      setOnline(true); closeModal();
+      setTab(active); closeModal();
+      await poll();
     }catch(e){
       cfg = old; KEY = oldKey; ok.disabled = false; err.textContent = e.message;
     }
@@ -528,13 +599,15 @@ $("#devChip").onclick = ()=>openConfig();
 $("#lockBtn").onclick = ()=>{
   if(!confirm("Esquecer token, senha e repositório DESTE navegador? As mensagens continuam guardadas.")) return;
   Object.values(LS).forEach(k=>localStorage.removeItem(k));
-  cfg = {tok:"", repo:"", pwd:""}; KEY = null; msgs = []; rendered.clear();
-  $("#msgs").innerHTML = ""; render(); setOnline(false); openConfig();
+  cfg = {tok:"", repo:"", pwd:""}; KEY = null;
+  for(const ch of Object.keys(CH)) st[ch] = {msgs:[], etag:null, seen:-1};
+  setTab(active); setOnline(false); openConfig();
 };
+document.querySelectorAll(".tabbtn").forEach(b=>b.onclick = ()=>setTab(b.dataset.ch));
 
 (async function init(){
   $("#devName").textContent = device || "definir";
-  render();
+  setTab(active);
   if(cfg.tok && cfg.repo && cfg.pwd){ KEY = await deriveKey(cfg.pwd); poll(); }
   else openConfig();
   loop();
