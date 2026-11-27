@@ -110,7 +110,7 @@
   .primary:disabled{opacity:.5}
   .err{color:var(--bad);font-size:13px;margin:-4px 0 12px;min-height:16px}
   .mini{margin-top:14px;font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
-  .tabs{display:flex;gap:6px;padding:8px clamp(12px,5vw,80px);border-bottom:1px solid var(--line);background:var(--panel)}
+  .tabs{display:flex;gap:6px;align-items:center;padding:8px clamp(12px,5vw,80px);border-bottom:1px solid var(--line);background:var(--panel)}
   .tabbtn{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:1px solid transparent;
     background:transparent;color:var(--muted);font-size:13.5px;font-weight:600}
   .tabbtn:hover{color:var(--text)}
@@ -139,6 +139,8 @@
   <nav class="tabs" id="tabs">
     <button class="tabbtn" data-ch="notas">Notas <span class="badge" id="b-notas"></span></button>
     <button class="tabbtn" data-ch="claude">✦ Claude <span class="badge" id="b-claude"></span></button>
+    <span class="spacer"></span>
+    <button class="ghost" id="clearBtn" title="Apaga as mensagens e arquivos desta aba no app (não mexe nas pastas do seu PC)">🧹 Limpar conversa</button>
   </nav>
 
   <section class="chat">
@@ -373,6 +375,43 @@ async function del(m){
   }catch(e){ alert("Não apaguei: "+e.message); }
   finally{ busy = false; }
 }
+// Limpa a aba ativa: apaga as mensagens e os arquivos DELA no repositório (o app).
+// Não mexe em nada nas pastas do PC (anexos da ponte, cópias em D:\Projects etc.).
+async function clearChat(){
+  const ch = active, nome = ch==="claude" ? "Claude" : "Notas";
+  const snap = st[ch].msgs.slice();
+  if(!snap.length){ toast(`A aba ${nome} já está vazia.`); setTimeout(()=>toast(""), 1800); return; }
+  const nArq = snap.filter(m=>m.f).length;
+  const extra = ch==="claude" ? "\n\nO Claude continua lembrando do assunto; para um Claude zerado, mande /novo depois." : "";
+  if(!confirm(`Limpar a conversa "${nome}"?\n\nApaga ${snap.length} mensagem(ns)${nArq ? ` e ${nArq} arquivo(s)` : ""} do app.\nAs pastas do seu PC NÃO são tocadas.\n\nNão dá para desfazer.${extra}`)) return;
+  if(!ready()){ openConfig(); return; }
+  const ids = new Set(snap.map(m=>m.id));            // só o que existia agora; o que chegar no meio fica
+  busy = true; $("#clearBtn").disabled = true;
+  try{
+    toast("Limpando a conversa…");
+    await mutate(ch, list=>list.filter(m=>!ids.has(m.id)));
+    for(const m of snap) if(urlCache.has(m.id)){ URL.revokeObjectURL(urlCache.get(m.id)); urlCache.delete(m.id); }
+    const parts = snap.filter(m=>m.f).flatMap(m=>m.f.parts || []);
+    let falhas = 0;
+    for(let i=0; i<parts.length; i++){
+      toast(`Apagando arquivos… ${i+1}/${parts.length}`);
+      let feito = false;
+      for(let k=0; k<4 && !feito; k++){
+        try{
+          const r = await gh(`/repos/${cfg.repo}/contents/${parts[i].p}`, {method:"DELETE",
+            headers:{"content-type":"application/json"}, body:JSON.stringify({message:"d", sha:parts[i].sha})});
+          if(r.ok || r.status===404) feito = true;          // 404 = já não existia
+          else if(r.status===409) await sleep(500 + Math.random()*800);
+          else break;
+        }catch{ break; }
+      }
+      if(!feito) falhas++;
+    }
+    toast(falhas ? `Conversa limpa. ${falhas} arquivo(s) não saíram do repositório (sem problema).` : "Conversa limpa ✓");
+    setTimeout(()=>toast(""), 2600);
+  }catch(e){ toast(""); alert("Não limpei: " + e.message); }
+  finally{ busy = false; $("#clearBtn").disabled = false; }
+}
 function copy(t, btn){
   const done = ()=>{ btn.textContent = "copiado ✓"; setTimeout(()=>btn.textContent = "copiar", 1200); };
   if(navigator.clipboard?.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
@@ -604,6 +643,7 @@ $("#lockBtn").onclick = ()=>{
   setTab(active); setOnline(false); openConfig();
 };
 document.querySelectorAll(".tabbtn").forEach(b=>b.onclick = ()=>setTab(b.dataset.ch));
+$("#clearBtn").onclick = clearChat;
 
 (async function init(){
   $("#devName").textContent = device || "definir";
